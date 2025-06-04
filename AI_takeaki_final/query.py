@@ -1,11 +1,12 @@
-from langchain.vectorstores.faiss import FAISS
+from langchain_community.vectorstores.faiss import FAISS
+from langchain_community.embeddings import OpenAIEmbeddings
 from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
-from load_and_embed import load_vectorstore
 
 def create_qa_chain():
     llm = ChatOpenAI(temperature=0)
+    embeddings = OpenAIEmbeddings()
 
     prompt = PromptTemplate(
         input_variables=["context", "question"],
@@ -18,7 +19,13 @@ def create_qa_chain():
 """
     )
 
-    vectorstore = FAISS.load_local("faiss_index", embeddings, index_name="faiss_index", allow_dangerous_deserialization=True)
+    vectorstore = FAISS.load_local(
+        "faiss_index",
+        embeddings,
+        index_name="faiss_index",
+        allow_dangerous_deserialization=True
+    )
+
     return RetrievalQA.from_chain_type(
         llm=llm,
         retriever=vectorstore.as_retriever(),
