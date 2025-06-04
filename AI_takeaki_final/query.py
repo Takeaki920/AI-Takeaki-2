@@ -18,7 +18,7 @@ def create_qa_chain():
 """
     )
 
-    vectorstore = load_vectorstore()
+    vectorstore = FAISS.load_local("faiss_index", embeddings, index_name="faiss_index", allow_dangerous_deserialization=True)
     return RetrievalQA.from_chain_type(
         llm=llm,
         retriever=vectorstore.as_retriever(),
