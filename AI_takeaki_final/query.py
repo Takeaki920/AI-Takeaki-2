@@ -1,7 +1,10 @@
-from langchain.vectorstores.faiss import FAISS
-from langchain.chains import RetrievalQA
-from langchain.chat_models import ChatOpenAI
-from langchain.prompts import PromptTemplate
+
+# langchain-community からの正しいインポートパスに変更
+from langchain_community.vectorstores import FAISS
+from langchain.chains import RetrievalQA # langchain.chains はまだ変更不要な場合も
+from langchain_openai import ChatOpenAI # OpenAI のモデルは langchain_openai に移動
+from langchain_core.prompts import PromptTemplate # プロンプトは langchain_core.prompts に移動
+
 from load_and_embed import load_vectorstore
 from dotenv import load_dotenv
 import os
@@ -14,7 +17,7 @@ def create_qa_chain():
     # APIキーの取得（ローカル優先、なければStreamlit Cloud用のsecretsから）
     openai_api_key = os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY"))
 
-    llm = ChatOpenAI(temperature=0, openai_api_key=openai_api_key)
+    llm = ChatOpenAI(temperature=0, openai_api_key=openai_api_key) # ここは変更なし
 
     prompt = PromptTemplate(
         input_variables=["context", "question"],
