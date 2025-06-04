@@ -1,6 +1,7 @@
 streamlit
 faiss-cpu==1.11.0
 openai
+langchain-openai
 python-dotenv
 docx2txt
 langchain-community==0.3.24
