@@ -1,4 +1,4 @@
-
+from langchain.vectorstores.faiss import FAISS
 from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
