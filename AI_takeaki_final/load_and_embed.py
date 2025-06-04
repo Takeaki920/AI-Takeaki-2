@@ -26,7 +26,7 @@ def load_and_embed():
     documents = split_texts(texts)
     embeddings = OpenAIEmbeddings()
     vectorstore = FAISS.from_documents(documents, embeddings)
-    vectorstore.save_local("faiss_index")
+    vectorstore.save_local("faiss_index", index_name="faiss_index")
     print("ベクトルDBの作成が完了しました。")
 
 def load_vectorstore():
