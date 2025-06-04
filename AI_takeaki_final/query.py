@@ -1,12 +1,20 @@
-from langchain_community.vectorstores.faiss import FAISS
-from langchain_community.embeddings import OpenAIEmbeddings
+from langchain.vectorstores.faiss import FAISS
 from langchain.chains import RetrievalQA
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
+from load_and_embed import load_vectorstore
+from dotenv import load_dotenv
+import os
+import streamlit as st
+
+# 環境変数をロード（ローカル用）
+load_dotenv()
 
 def create_qa_chain():
-    llm = ChatOpenAI(temperature=0)
-    embeddings = OpenAIEmbeddings()
+    # APIキーの取得（ローカル優先、なければStreamlit Cloud用のsecretsから）
+    openai_api_key = os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY"))
+
+    llm = ChatOpenAI(temperature=0, openai_api_key=openai_api_key)
 
     prompt = PromptTemplate(
         input_variables=["context", "question"],
@@ -19,13 +27,7 @@ def create_qa_chain():
 """
     )
 
-    vectorstore = FAISS.load_local(
-        "faiss_index",
-        embeddings,
-        index_name="faiss_index",
-        allow_dangerous_deserialization=True
-    )
-
+    vectorstore = load_vectorstore()
     return RetrievalQA.from_chain_type(
         llm=llm,
         retriever=vectorstore.as_retriever(),
