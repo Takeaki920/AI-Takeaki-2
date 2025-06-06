@@ -3,7 +3,7 @@ import glob
 import docx2txt
 import zipfile
 import requests
-import shutil # 追加
+import shutil
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenAIEmbeddings
@@ -20,8 +20,8 @@ if not openai_api_key:
 # FAISSインデックスのパス
 FAISS_INDEX_PATH = "faiss_index"
 
-# GitHub Releases のダウンロードURL (ここにあなたのURLを正確に貼り付けてください！)
-DOWNLOAD_URL = "https://github.com/Takeaki920/AI-Takeaki-2/releases/download/v1.0.0/faiss_index.zip"
+# GitHub Releases のダウンロードURL (新しいURLに更新)
+DOWNLOAD_URL = "https://github.com/Takeaki920/AI-Takeaki-2/releases/download/v1.01/faiss_index.zip"
 
 
 def load_documents_from_docs_folder(folder_path):
@@ -68,31 +68,36 @@ def download_and_extract_faiss_index():
 
             # ZIPファイルを解凍
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                # 一時ディレクトリに解凍し、中身を移動させる堅牢な方法
+                # 一時ディレクトリに解凍
                 temp_extract_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_faiss_extract")
                 os.makedirs(temp_extract_dir, exist_ok=True)
-                zip_ref.extractall(temp_extract_dir) # 一時ディレクトリに解凍
+                zip_ref.extractall(temp_extract_dir)
 
                 # ターゲットディレクトリを最終的に作成
                 os.makedirs(target_faiss_dir, exist_ok=True)
 
-                # 解凍されたフォルダ（通常はfaiss_index）を正しい位置に移動
-                # temp_extract_dir の中身を確認し、適切なフォルダを移動
-                extracted_content = os.listdir(temp_extract_dir)
+                # 解凍された中身を target_faiss_dir に移動させる
+                # ZIPの中に「faiss_index/」フォルダが入っている場合も、
+                # 直接「index.faiss」と「index.pkl」が入っている場合も対応できるようにします。
                 
-                # ZIPの中にfaiss_indexフォルダが丸ごと入っている場合（最も一般的なケース）
-                if len(extracted_content) == 1 and os.path.isdir(os.path.join(temp_extract_dir, extracted_content[0])):
-                    print(f"Moving extracted directory '{extracted_content[0]}' to '{target_faiss_dir}'")
-                    # 例: temp_faiss_extract/faiss_index/ を AI_takeaki_final/faiss_index/ に移動
-                    for item_in_inner_dir in os.listdir(os.path.join(temp_extract_dir, extracted_content[0])):
-                        shutil.move(os.path.join(temp_extract_dir, extracted_content[0], item_in_inner_dir), target_faiss_dir)
-                    shutil.rmtree(os.path.join(temp_extract_dir, extracted_content[0])) # 空になった中間ディレクトリを削除
-                else:
-                    # ZIPの中に直接index.faissなどが入っている場合
-                    print(f"Moving extracted files directly to '{target_faiss_dir}'")
-                    for item in extracted_content:
-                        shutil.move(os.path.join(temp_extract_dir, item), target_faiss_dir)
+                # temp_extract_dir の中身を全て取得
+                extracted_items = os.listdir(temp_extract_dir)
 
+                # ZIPの中に faiss_index フォルダが直に入っているかを確認
+                # （例: temp_extract_dir/faiss_index/index.faiss）
+                if len(extracted_items) == 1 and os.path.isdir(os.path.join(temp_extract_dir, extracted_items[0])) and extracted_items[0] == FAISS_INDEX_PATH:
+                    # faiss_index/faiss_index/ のような構造の場合
+                    print(f"Detected nested '{FAISS_INDEX_PATH}' directory. Moving contents.")
+                    source_dir_to_move = os.path.join(temp_extract_dir, FAISS_INDEX_PATH)
+                    for item in os.listdir(source_dir_to_move):
+                        shutil.move(os.path.join(source_dir_to_move, item), target_faiss_dir)
+                    shutil.rmtree(source_dir_to_move) # 空になった一時ディレクトリを削除
+                else:
+                    # ZIPの中に直接 index.faiss, index.pkl などが入っている場合
+                    print(f"Moving extracted files directly to '{target_faiss_dir}'")
+                    for item in extracted_items:
+                        shutil.move(os.path.join(temp_extract_dir, item), target_faiss_dir)
+                
                 # 一時ディレクトリを削除
                 shutil.rmtree(temp_extract_dir)
 
@@ -115,7 +120,6 @@ def download_and_extract_faiss_index():
             print(f"An unexpected error occurred during download/extraction: {e}")
             raise
     else:
-        # このパスは、クリーンアップロジックがあるので、通常は実行されないはずですが、念のため
         print(f"'{target_faiss_dir}' already exists and is not empty. Skipping download (should have been cleared).")
 
 
