@@ -42,54 +42,81 @@ def split_texts(texts):
     return flat_documents
 
 def download_and_extract_faiss_index():
-    # faiss_index フォルダが存在し、かつ中身が空でないかを確認
-    # os.path.join(os.path.dirname(os.path.abspath(__file__)), FAISS_INDEX_PATH)
-    # これは AI_takeaki_final/faiss_index を指します
     target_faiss_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), FAISS_INDEX_PATH)
 
-    if os.path.exists(target_faiss_dir) and os.path.isdir(target_faiss_dir) and os.listdir(target_faiss_dir):
-        print(f"'{target_faiss_dir}' already exists and is not empty. Skipping download.")
-        return
-
-    print(f"'{target_faiss_dir}' not found or is empty. Downloading from {DOWNLOAD_URL}...")
+    # 最初に、ターゲットディレクトリをクリーンアップします。
+    # これにより、前回のデプロイで作成された可能性のある不完全な/間違ったフォルダが削除されます。
+    if os.path.exists(target_faiss_dir):
+        print(f"Clearing existing FAISS directory: {target_faiss_dir}")
+        import shutil
+        shutil.rmtree(target_faiss_dir)
     
-    try:
-        # ZIPファイルをダウンロード
-        response = requests.get(DOWNLOAD_URL, stream=True)
-        response.raise_for_status() # HTTPエラー (4xx, 5xx) があれば例外を発生
+    # フォルダが存在しない場合のみダウンロード (shutil.rmtree で削除したので、このチェックはほぼ常にTrueになりますが、安全のため残す)
+    if not os.path.exists(target_faiss_dir) or not os.listdir(target_faiss_dir):
+        print(f"'{target_faiss_dir}' not found or is empty. Downloading from {DOWNLOAD_URL}...")
+        
+        try:
+            # ZIPファイルをダウンロード
+            response = requests.get(DOWNLOAD_URL, stream=True)
+            response.raise_for_status() 
 
-        # ダウンロード先のZIPファイルパスをスクリプトのディレクトリ内に指定
-        zip_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "faiss_index.zip")
-        with open(zip_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        print(f"Downloaded {zip_path}")
+            zip_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "faiss_index.zip")
+            with open(zip_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            print(f"Downloaded {zip_path}")
 
-        # ZIPファイルを解凍
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # 解凍先を現在のスクリプトのディレクトリに設定 (AI_takeaki_final/)
-            # これでZIPの中身がfaiss_index/index.faissなどの構造の場合、
-            # AI_takeaki_final/faiss_index/index.faiss となることを期待します。
-            zip_ref.extractall(os.path.dirname(os.path.abspath(__file__))) 
-        print(f"Extracted {zip_path} to {os.path.dirname(os.path.abspath(__file__))}")
+            # ZIPファイルを解凍
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                # 一時ディレクトリに解凍し、中身を移動させる堅牢な方法
+                temp_extract_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_faiss_extract")
+                os.makedirs(temp_extract_dir, exist_ok=True)
+                zip_ref.extractall(temp_extract_dir) # 一時ディレクトリに解凍
 
-        # ダウンロードしたZIPファイルを削除
-        os.remove(zip_path)
-        print(f"Removed {zip_path}")
+                # ターゲットディレクトリを最終的に作成
+                os.makedirs(target_faiss_dir, exist_ok=True)
 
-    except requests.exceptions.RequestException as e:
-        print(f"Error downloading FAISS index: {e}")
-        raise
-    except zipfile.BadZipFile as e:
-        print(f"Error extracting ZIP file (bad zip): {e}")
-        # 破損したZIPファイルが残っている可能性があるので削除を試みる
-        if os.path.exists(zip_path):
+                # 解凍されたフォルダ（通常はfaiss_index）を正しい位置に移動
+                # temp_extract_dir の中身を確認し、適切なフォルダを移動
+                extracted_content = os.listdir(temp_extract_dir)
+                
+                # ZIPの中にfaiss_indexフォルダが丸ごと入っている場合（最も一般的なケース）
+                if len(extracted_content) == 1 and os.path.isdir(os.path.join(temp_extract_dir, extracted_content[0])):
+                    print(f"Moving extracted directory '{extracted_content[0]}' to '{target_faiss_dir}'")
+                    # 例: temp_faiss_extract/faiss_index/ を AI_takeaki_final/faiss_index/ に移動
+                    for item_in_inner_dir in os.listdir(os.path.join(temp_extract_dir, extracted_content[0])):
+                        shutil.move(os.path.join(temp_extract_dir, extracted_content[0], item_in_inner_dir), target_faiss_dir)
+                    shutil.rmtree(os.path.join(temp_extract_dir, extracted_content[0])) # 空になった中間ディレクトリを削除
+                else:
+                    # ZIPの中に直接index.faissなどが入っている場合
+                    print(f"Moving extracted files directly to '{target_faiss_dir}'")
+                    for item in extracted_content:
+                        shutil.move(os.path.join(temp_extract_dir, item), target_faiss_dir)
+
+                # 一時ディレクトリを削除
+                shutil.rmtree(temp_extract_dir)
+
+            print(f"Extracted {zip_path} to {target_faiss_dir}")
+
+            # ダウンロードしたZIPファイルを削除
             os.remove(zip_path)
-            print(f"Removed potentially corrupted {zip_path}")
-        raise
-    except Exception as e:
-        print(f"An unexpected error occurred during download/extraction: {e}")
-        raise
+            print(f"Removed {zip_path}")
+
+        except requests.exceptions.RequestException as e:
+            print(f"Error downloading FAISS index: {e}")
+            raise
+        except zipfile.BadZipFile as e:
+            print(f"Error extracting ZIP file (bad zip): {e}")
+            if os.path.exists(zip_path):
+                os.remove(zip_path)
+                print(f"Removed potentially corrupted {zip_path}")
+            raise
+        except Exception as e:
+            print(f"An unexpected error occurred during download/extraction: {e}")
+            raise
+    else:
+        # このパスは、クリーンアップロジックがあるので、通常は実行されないはずですが、念のため
+        print(f"'{target_faiss_dir}' already exists and is not empty. Skipping download (should have been cleared).")
 
 
 def load_and_embed():
@@ -98,21 +125,13 @@ def load_and_embed():
     documents = split_texts(texts)
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
     vectorstore = FAISS.from_documents(documents, embeddings)
-    # ここでの保存は、FAISS_INDEX_PATH (AI_takeaki_final/faiss_index) に保存されます
     vectorstore.save_local(FAISS_INDEX_PATH, index_name="faiss_index") 
     print("ベクトルDBの作成が完了しました。")
 
 def load_vectorstore():
     embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
-    # FAISSインデックスが存在しない場合にダウンロードと展開を実行
     download_and_extract_faiss_index()
-    # 既存のFAISSインデックスをロード
-    # FAISS_INDEX_PATH は "faiss_index" で、load_and_embed.py の相対パスで探す
     return FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
 
 if __name__ == "__main__":
-    # このスクリプトを単独で実行してベクトルDBを再作成したい場合に、以下の行をコメントアウト解除してください。
-    # load_and_embed()
-    # 通常は、Streamlit Cloudでこのファイルが起動された際にload_vectorstore()が呼ばれ、
-    # その中で必要に応じてダウンロードが実行されます。
     print("load_and_embed.py executed. This script typically acts as a module for Streamlit.")
