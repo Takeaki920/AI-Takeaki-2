@@ -1,8 +1,9 @@
 import os
 import glob
 import docx2txt
-import zipfile # 追加
-import requests # 追加
+import zipfile
+import requests
+import shutil # 追加
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import OpenAIEmbeddings
@@ -12,7 +13,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # OpenAI APIキーを環境変数から取得
-# Streamlit CloudのSecretsで設定している場合、os.getenv()で自動的に読み込まれます。
 openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     raise ValueError("OPENAI_API_KEY environment variable not set.")
@@ -36,7 +36,6 @@ def load_documents_from_docs_folder(folder_path):
 
 def split_texts(texts):
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    # create_documentsはリストのリストを返す可能性があるため、フラットにする
     flat_documents = []
     for text in texts:
         flat_documents.extend(splitter.create_documents([text]))
@@ -44,28 +43,35 @@ def split_texts(texts):
 
 def download_and_extract_faiss_index():
     # faiss_index フォルダが存在し、かつ中身が空でないかを確認
-    if os.path.exists(FAISS_INDEX_PATH) and os.path.isdir(FAISS_INDEX_PATH) and os.listdir(FAISS_INDEX_PATH):
-        print(f"'{FAISS_INDEX_PATH}' already exists and is not empty. Skipping download.")
+    # os.path.join(os.path.dirname(os.path.abspath(__file__)), FAISS_INDEX_PATH)
+    # これは AI_takeaki_final/faiss_index を指します
+    target_faiss_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), FAISS_INDEX_PATH)
+
+    if os.path.exists(target_faiss_dir) and os.path.isdir(target_faiss_dir) and os.listdir(target_faiss_dir):
+        print(f"'{target_faiss_dir}' already exists and is not empty. Skipping download.")
         return
 
-    print(f"'{FAISS_INDEX_PATH}' not found or is empty. Downloading from {DOWNLOAD_URL}...")
+    print(f"'{target_faiss_dir}' not found or is empty. Downloading from {DOWNLOAD_URL}...")
     
     try:
         # ZIPファイルをダウンロード
         response = requests.get(DOWNLOAD_URL, stream=True)
         response.raise_for_status() # HTTPエラー (4xx, 5xx) があれば例外を発生
 
-        zip_path = "faiss_index.zip"
+        # ダウンロード先のZIPファイルパスをスクリプトのディレクトリ内に指定
+        zip_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "faiss_index.zip")
         with open(zip_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
         print(f"Downloaded {zip_path}")
 
         # ZIPファイルを解凍
-        # 解凍先は現在の作業ディレクトリ (AI_takeaki_final)
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(".") # 現在のディレクトリに解凍
-        print(f"Extracted {zip_path} to {os.getcwd()}")
+            # 解凍先を現在のスクリプトのディレクトリに設定 (AI_takeaki_final/)
+            # これでZIPの中身がfaiss_index/index.faissなどの構造の場合、
+            # AI_takeaki_final/faiss_index/index.faiss となることを期待します。
+            zip_ref.extractall(os.path.dirname(os.path.abspath(__file__))) 
+        print(f"Extracted {zip_path} to {os.path.dirname(os.path.abspath(__file__))}")
 
         # ダウンロードしたZIPファイルを削除
         os.remove(zip_path)
@@ -76,6 +82,10 @@ def download_and_extract_faiss_index():
         raise
     except zipfile.BadZipFile as e:
         print(f"Error extracting ZIP file (bad zip): {e}")
+        # 破損したZIPファイルが残っている可能性があるので削除を試みる
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
+            print(f"Removed potentially corrupted {zip_path}")
         raise
     except Exception as e:
         print(f"An unexpected error occurred during download/extraction: {e}")
@@ -83,21 +93,21 @@ def download_and_extract_faiss_index():
 
 
 def load_and_embed():
-    # この関数は、FAISSインデックスを最初から作成し直す場合にのみ使用します。
-    # Streamlit Cloudでは、通常は download_and_extract_faiss_index() を通して既存のインデックスをロードします。
     docs_path = "docs"
     texts = load_documents_from_docs_folder(docs_path)
     documents = split_texts(texts)
-    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key) # APIキーを渡す
+    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
     vectorstore = FAISS.from_documents(documents, embeddings)
-    vectorstore.save_local(FAISS_INDEX_PATH, index_name="faiss_index") # index_nameも指定
+    # ここでの保存は、FAISS_INDEX_PATH (AI_takeaki_final/faiss_index) に保存されます
+    vectorstore.save_local(FAISS_INDEX_PATH, index_name="faiss_index") 
     print("ベクトルDBの作成が完了しました。")
 
 def load_vectorstore():
-    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key) # APIキーを渡す
+    embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
     # FAISSインデックスが存在しない場合にダウンロードと展開を実行
     download_and_extract_faiss_index()
     # 既存のFAISSインデックスをロード
+    # FAISS_INDEX_PATH は "faiss_index" で、load_and_embed.py の相対パスで探す
     return FAISS.load_local(FAISS_INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
 
 if __name__ == "__main__":
