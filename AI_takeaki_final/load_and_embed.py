@@ -17,8 +17,8 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     raise ValueError("OPENAI_API_KEY environment variable not set.")
 
-# FAISSインデックスのパス
-FAISS_INDEX_PATH = "faiss_index"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FAISS_INDEX_PATH = os.path.join(BASE_DIR, "faiss_index")
 
 # GitHub Releases のダウンロードURL (新しいURLに更新)
 DOWNLOAD_URL = "https://github.com/Takeaki920/AI-Takeaki-2/releases/download/v1.01/faiss_index.zip"
