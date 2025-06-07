@@ -17,16 +17,20 @@ def create_qa_chain():
     # APIキーの取得（ローカル優先、なければStreamlit Cloud用のsecretsから）
     openai_api_key = os.getenv("OPENAI_API_KEY", st.secrets.get("OPENAI_API_KEY"))
 
-    llm = ChatOpenAI(temperature=0, openai_api_key=openai_api_key) # ここは変更なし
+    llm = ChatOpenAI(temperature=0.7, openai_api_key=openai_api_key) # ★ここを0.7に変更★
 
     prompt = PromptTemplate(
         input_variables=["context", "question"],
         template="""
-あなたは「AIたけあき」です。以下の文脈に基づいて、誠実かつやさしく回答してください。
+あなたは「AIたけあき」です。ユーザーの分身として、フレンドリーで親しみやすい言葉遣いで回答してください。
+回答は会話形式で、難しい専門用語は避け、分かりやすく説明してください。
+**そして、回答の最後には「〜というわけです」または「〜なんですね」のような、親しみやすい語尾で締めくくるようにしてください。**
 
 文脈: {context}
 
 質問: {question}
+
+回答：
 """
     )
 
