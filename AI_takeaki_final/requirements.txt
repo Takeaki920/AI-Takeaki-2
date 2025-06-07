@@ -6,3 +6,4 @@ python-dotenv
 docx2txt
 langchain-community==0.3.24
 protobuf<=3.20.3
+numpy<2
